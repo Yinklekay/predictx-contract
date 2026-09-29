@@ -1,6 +1,7 @@
 #![no_std]
 
 mod matches;
+mod payouts;
 mod staking;
 pub(crate) mod token_utils;
 
@@ -64,12 +65,12 @@ pub struct PoolInfo {
     pub no_count: u32,
 }
 
-fn get_admin(env: &Env) -> Result<Address, PredictXError> {
+pub(crate) fn get_admin(env: &Env) -> Result<Address, PredictXError> {
     env.storage().instance().get(&DataKey::Admin)
         .ok_or(PredictXError::NotInitialized)
 }
 
-fn get_oracle(env: &Env) -> Result<Address, PredictXError> {
+pub(crate) fn get_oracle(env: &Env) -> Result<Address, PredictXError> {
     env.storage().instance().get(&DataKey::VotingOracle)
         .ok_or(PredictXError::NotInitialized)
 }
@@ -314,41 +315,6 @@ impl PredictionMarket {
             .publish((Symbol::new(&env, "PollCreated"), poll_id), ());
 
         Ok(poll_id)
-    }
-
-
-    /// Resolve a poll with a boolean outcome. Callable only by the registered oracle.
-    pub fn resolve_poll(
-        env: Env,
-        caller: Address,
-        poll_id: u64,
-        outcome: bool,
-    ) -> Result<(), PredictXError> {
-        caller.require_auth();
-        let oracle = get_oracle(&env)?;
-        if caller != oracle {
-            return Err(PredictXError::Unauthorized);
-        }
-
-        let mut poll: Poll = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Poll(poll_id))
-            .ok_or(PredictXError::PollNotFound)?;
-
-        if poll.status == PollStatus::Resolved || poll.outcome.is_some() {
-            return Err(PredictXError::PollAlreadyResolved);
-        }
-
-        poll.outcome = Some(outcome);
-        poll.resolution_time = env.ledger().timestamp();
-        poll.status = PollStatus::Resolved;
-
-        env.storage()
-            .persistent()
-            .set(&DataKey::Poll(poll_id), &poll);
-
-        Ok(())
     }
 
     pub fn get_poll(env: Env, poll_id: u64) -> Result<Poll, PredictXError> {
